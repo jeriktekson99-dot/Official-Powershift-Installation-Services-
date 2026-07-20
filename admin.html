@@ -2922,6 +2922,12 @@
           sessionStorage.setItem("powershift_admin_logged_in", "true");
           triggerToast("Access Granted. Handshaking secure terminal.", "success");
           
+          // Keep local variables in sync with entered credentials
+          window.MASTER_GATE_PASS = passVal;
+          localStorage.setItem("powershift_admin_pass", passVal);
+          window.MASTER_CORP_EMAIL = emailVal;
+          localStorage.setItem("powershift_admin_email", emailVal);
+          
           // Transition cleanly
           viewLogin.classList.add("opacity-0", "transition-opacity", "duration-300");
           setTimeout(async () => {
@@ -8532,16 +8538,30 @@
           throw new Error("Supabase is offline or not configured.");
         }
 
-        // 1. Verify old password correctness locally using MASTER_GATE_PASS
-        const currentPass = window.MASTER_GATE_PASS || MASTER_GATE_PASS;
-        if (oldPassword !== currentPass) {
-          throw new Error("Old Password mismatch! Access denied.");
+        // 1. Get the current active user session if it exists in Supabase
+        let user = null;
+        try {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          user = currentUser;
+        } catch (e) {
+          console.error("[Powershift Admin Sync] Error fetching current user:", e);
         }
 
-        // 2. Try to get the current active user session if it exists
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        if (user && user.email) {
+          // 2. We have a Supabase Auth session! Securely verify old password by re-authenticating
+          console.log("[Powershift Admin Sync] Verifying old password correctness with Supabase Auth...");
+          const { error: signInErr } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password: oldPassword
+          });
+
+          if (signInErr) {
+            console.error("[Powershift Admin Sync] Re-authentication failed:", signInErr);
+            throw new Error("Old Password mismatch! Access denied.");
+          }
+
           // 3. Update the password in Supabase Auth securely
+          console.log("[Powershift Admin Sync] Securely updating password in Supabase Auth...");
           const { error: updateErr } = await supabase.auth.updateUser({
             password: newPassword
           });
@@ -8550,9 +8570,23 @@
             console.error("[Supabase Auth Password Update Error]", updateErr);
             throw new Error(`Failed to update authentication credentials: ${updateErr.message}`);
           }
-        }
 
-        return true;
+          // Update local variables & localstorage to keep them in sync
+          window.MASTER_GATE_PASS = newPassword;
+          localStorage.setItem("powershift_admin_pass", newPassword);
+          return true;
+        } else {
+          // Fallback: If no Supabase user session exists, verify locally
+          console.log("[Powershift Admin Sync] No active Supabase Auth user found. Verifying password locally...");
+          const currentPass = window.MASTER_GATE_PASS || localStorage.getItem("powershift_admin_pass") || MASTER_GATE_PASS;
+          if (oldPassword !== currentPass) {
+            throw new Error("Old Password mismatch! Access denied.");
+          }
+
+          window.MASTER_GATE_PASS = newPassword;
+          localStorage.setItem("powershift_admin_pass", newPassword);
+          return true;
+        }
       };
 
       async function pullFromSupabase() {
