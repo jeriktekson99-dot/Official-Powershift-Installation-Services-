@@ -435,37 +435,52 @@ export function useSyncDb() {
     window.addEventListener('storage', handleUpdate);
     window.addEventListener('powershift_db_update', handleUpdate);
 
+    // Background fetch helper to pull fresh listings from Supabase
+    const syncWithSupabase = () => {
+      Promise.all([
+        supabaseService.getPortfolio().catch(err => { console.warn("[Supabase Sync] Portfolio fetch error:", err); return null; }),
+        supabaseService.getProducts().catch(err => { console.warn("[Supabase Sync] Products fetch error:", err); return null; }),
+        supabaseService.getPackages().catch(err => { console.warn("[Supabase Sync] Packages fetch error:", err); return null; })
+      ]).then(([portfolio, products, packages]) => {
+        const localDb = getSavedDb();
+        let modified = false;
+
+        if (portfolio !== null && Array.isArray(portfolio)) {
+          if (JSON.stringify(localDb.portfolio) !== JSON.stringify(portfolio)) {
+            localDb.portfolio = portfolio;
+            modified = true;
+          }
+        }
+        if (products !== null && Array.isArray(products)) {
+          if (JSON.stringify(localDb.products) !== JSON.stringify(products)) {
+            localDb.products = products;
+            modified = true;
+          }
+        }
+        if (packages !== null && Array.isArray(packages)) {
+          if (JSON.stringify(localDb.packages) !== JSON.stringify(packages)) {
+            localDb.packages = packages;
+            modified = true;
+          }
+        }
+
+        if (modified) {
+          saveDb(localDb);
+          setDb(localDb);
+        }
+      }).catch(err => {
+        console.warn("[Powershift Sync] Failed to load database from Supabase:", err);
+      });
+    };
+
     // Initial background load from Supabase to catch up
-    Promise.all([
-      supabaseService.getPortfolio().catch(err => { console.warn("[Supabase Sync] Portfolio fetch error:", err); return null; }),
-      supabaseService.getProducts().catch(err => { console.warn("[Supabase Sync] Products fetch error:", err); return null; }),
-      supabaseService.getPackages().catch(err => { console.warn("[Supabase Sync] Packages fetch error:", err); return null; })
-    ]).then(([portfolio, products, packages]) => {
-      const localDb = getSavedDb();
-      let modified = false;
+    syncWithSupabase();
 
-      if (portfolio !== null && Array.isArray(portfolio)) {
-        localDb.portfolio = portfolio;
-        modified = true;
-      }
-      if (products !== null && Array.isArray(products)) {
-        localDb.products = products;
-        modified = true;
-      }
-      if (packages !== null && Array.isArray(packages)) {
-        localDb.packages = packages;
-        modified = true;
-      }
-
-      if (modified) {
-        saveDb(localDb);
-        setDb(localDb);
-      }
-    }).catch(err => {
-      console.warn("[Powershift Sync] Failed to load database from Supabase (using cached/default):", err);
-    });
+    // Establish dynamic background polling interval to pull new admin postings instantly
+    const intervalId = setInterval(syncWithSupabase, 5000);
 
     return () => {
+      clearInterval(intervalId);
       window.removeEventListener('storage', handleUpdate);
       window.removeEventListener('powershift_db_update', handleUpdate);
     };
@@ -739,19 +754,30 @@ export function useSyncSpecialOffers() {
     window.addEventListener('storage', handleUpdate);
     window.addEventListener('powershift_special_offers_update', handleUpdate);
 
+    const fetchOffers = () => {
+      supabaseService.getSpecialOffers()
+        .then((remoteOffers) => {
+          if (remoteOffers !== null && Array.isArray(remoteOffers)) {
+            const localOffers = getSavedSpecialOffers();
+            if (JSON.stringify(localOffers) !== JSON.stringify(remoteOffers)) {
+              saveSpecialOffers(remoteOffers);
+              setOffers(remoteOffers);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn("[Powershift Sync] Failed to load special offers from Supabase (using cached):", err);
+        });
+    };
+
     // Initial load from Supabase to catch up
-    supabaseService.getSpecialOffers()
-      .then((remoteOffers) => {
-        if (remoteOffers !== null && Array.isArray(remoteOffers)) {
-          saveSpecialOffers(remoteOffers);
-          setOffers(remoteOffers);
-        }
-      })
-      .catch((err) => {
-        console.warn("[Powershift Sync] Failed to load special offers from Supabase (using cached):", err);
-      });
+    fetchOffers();
+
+    // Setup active background polling for promotional campaign assets
+    const intervalId = setInterval(fetchOffers, 5000);
 
     return () => {
+      clearInterval(intervalId);
       window.removeEventListener('storage', handleUpdate);
       window.removeEventListener('powershift_special_offers_update', handleUpdate);
     };

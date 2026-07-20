@@ -378,13 +378,18 @@ export default function ProductDetailsPage({
 
   // Overwrite with real-time reactive synchronized state
   const allProducts = useMemo<Record<number, ProductDetailsData>>(() => {
-    const map: Record<number, ProductDetailsData> = { ...staticProducts };
+    const map: Record<number, ProductDetailsData> = {};
     (db.products || []).forEach(p => {
       const numericId = idToNumber(p.id);
       
+      // Inherit beautiful pre-authored high-fidelity descriptions and spec lines if matching
+      const staticMatch = staticProducts[numericId] || Object.values(staticProducts).find(
+        sp => sp.name.toLowerCase() === p.name.toLowerCase() || sp.name.includes(p.name) || p.name.includes(sp.name)
+      );
+
       let specs: string[] = ["Availability: " + p.status, "Location: " + p.location, "In Stock: " + p.stock];
-      let architectureText = "";
-      let reliabilityText = "";
+      let architectureText = staticMatch ? staticMatch.architectureText : "";
+      let reliabilityText = staticMatch ? staticMatch.reliabilityText : "";
 
       if (p.description) {
         try {
@@ -394,31 +399,34 @@ export default function ProductDetailsPage({
           const lis = tempDiv.getElementsByTagName('li');
           if (lis.length > 0) {
             specs = Array.from(lis).map(li => li.textContent || '');
+          } else if (staticMatch && staticMatch.specs) {
+            specs = staticMatch.specs;
           }
 
           const paragraphs = tempDiv.getElementsByTagName('p');
           if (paragraphs.length > 0) {
-            architectureText = paragraphs[0]?.textContent || "";
-            reliabilityText = paragraphs[1]?.textContent || paragraphs[0]?.textContent || "";
-          } else {
-            architectureText = tempDiv.textContent || "";
-            reliabilityText = "";
+            architectureText = paragraphs[0]?.textContent || architectureText;
+            reliabilityText = paragraphs[1]?.textContent || paragraphs[0]?.textContent || reliabilityText;
+          } else if (tempDiv.textContent && tempDiv.textContent.trim().length > 0) {
+            architectureText = tempDiv.textContent || architectureText;
           }
         } catch (e) {
           console.error("Error parsing product details description HTML:", e);
         }
+      } else if (staticMatch && staticMatch.specs) {
+        specs = staticMatch.specs;
       }
 
       if (!architectureText) {
         architectureText = `${p.name} is a high-performance system engineered for maximum output. Designed to deliver continuous energy output under harsh tropical conditions.`;
       }
-      if (!reliabilityText && !p.description) {
+      if (!reliabilityText) {
         reliabilityText = "Manufactured with premium components. Features a durable construction, certified wind and load resistance, and backed by comprehensive warranties.";
       }
 
       const getCategoryDefaultImages = (categoryName: string) => {
         const cat = (categoryName || "").toLowerCase();
-        if (cat.includes("panel") || cat.includes("pv")) {
+        if (cat.includes("panel") || cat.includes("pv") || cat.includes("dah solar") || cat.includes("astronergy")) {
           return [
             "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=800&q=80",
             "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&fit=crop&w=800&q=80",
@@ -427,7 +435,7 @@ export default function ProductDetailsPage({
             "https://images.unsplash.com/photo-1592833159155-c62df1b65634?auto=format&fit=crop&w=800&q=80",
             "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?auto=format&fit=crop&w=800&q=80"
           ];
-        } else if (cat.includes("inverter") || cat.includes("controller") || cat.includes("smart") || cat.includes("gateway")) {
+        } else if (cat.includes("inverter") || cat.includes("controller") || cat.includes("smart") || cat.includes("gateway") || cat.includes("deye") || cat.includes("solis") || cat.includes("srne")) {
           return [
             "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=800&q=80",
             "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80",
@@ -436,7 +444,7 @@ export default function ProductDetailsPage({
             "https://images.unsplash.com/photo-1563770660941-20978e870e26?auto=format&fit=crop&w=800&q=80",
             "https://images.unsplash.com/photo-1544256718-3bcf237f3974?auto=format&fit=crop&w=800&q=80"
           ];
-        } else if (cat.includes("battery") || cat.includes("lithium") || cat.includes("storage")) {
+        } else if (cat.includes("battery") || cat.includes("lithium") || cat.includes("storage") || cat.includes("pylontech") || cat.includes("menred")) {
           return [
             "https://images.unsplash.com/photo-1548613053-220bfb8830de?auto=format&fit=crop&w=800&q=80",
             "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=800&q=80",
@@ -457,7 +465,7 @@ export default function ProductDetailsPage({
         }
       };
 
-      let baseImages = (p.images && p.images.length > 0) ? p.images : [];
+      let baseImages = (p.images && p.images.length > 0) ? p.images : (staticMatch && staticMatch.thumbnails ? staticMatch.thumbnails : []);
       const defaultPool = getCategoryDefaultImages(p.category);
       if (baseImages.length < 6) {
         const extra = defaultPool.filter(img => !baseImages.includes(img));
@@ -648,20 +656,15 @@ export default function ProductDetailsPage({
     { id: 6, name: "Zero-Penetration Aluminum Mounting Rails", category: "Mounting Racks", rating: "5.0 / 5.0", img: "https://images.unsplash.com/photo-1592833159155-c62df1b65634?auto=format&fit=crop&w=100&q=80" }
   ];
 
-  // 3 related products for horizontal Carousel grid below (excluding current id, picking three)
+  // 3 related products for horizontal Carousel grid below (strictly matching active product category, no backfilling, only database products)
   const relatedCarouselItems = useMemo(() => {
-    const allList = (Object.values(allProducts) as ProductDetailsData[]).filter(p => p.id !== activeProduct.id);
-    let list = allList;
-    if (selectedCategories.length > 0) {
-      list = allList.filter(p => selectedCategories.includes(p.category));
-    }
-    // Backfill with other products if there are less than 3 in the selected category
-    if (list.length < 3) {
-      const extra = allList.filter(p => !list.some(item => item.id === p.id));
-      list = [...list, ...extra];
-    }
+    const dbProductIds = new Set((db.products || []).map(p => idToNumber(p.id)));
+    const allList = (Object.values(allProducts) as ProductDetailsData[]).filter(
+      p => p.id !== activeProduct.id && dbProductIds.has(p.id)
+    );
+    const list = allList.filter(p => p.category === activeProduct.category);
     return list.slice(0, 3);
-  }, [allProducts, activeProduct.id, selectedCategories]);
+  }, [allProducts, activeProduct.id, activeProduct.category, db.products]);
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -940,65 +943,72 @@ export default function ProductDetailsPage({
                 Related Products
               </h2>
             </div>
-
             {/* Sleek minimalist left/right arrow icons */}
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => {
-                  if (relatedCarouselItems.length > 0) {
+            {relatedCarouselItems.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
                     handleItemSelect(relatedCarouselItems[0].id);
-                  }
-                }}
-                className="w-10 h-10 rounded-full border border-stone-300 hover:border-forest-950 text-stone-600 hover:text-forest-950 flex items-center justify-center bg-white transition-all cursor-pointer"
-                title="View previous related asset"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => {
-                  if (relatedCarouselItems.length > 0) {
-                    handleItemSelect(relatedCarouselItems[relatedCarouselItems.length - 1].id);
-                  }
-                }}
-                className="w-10 h-10 rounded-full border border-stone-300 hover:border-forest-950 text-stone-600 hover:text-forest-950 flex items-center justify-center bg-white transition-all cursor-pointer"
-                title="View next related asset"
-              >
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {relatedCarouselItems.map(item => (
-              <div 
-                key={item.id}
-                className="bg-white rounded-3xl border border-stone-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden group select-none text-left"
-              >
-                {/* Container design: Image */}
-                <div 
-                  onClick={() => handleItemSelect(item.id)}
-                  className="relative aspect-[4/3.3] bg-stone-100 overflow-hidden border-b border-stone-100 cursor-pointer"
+                  }}
+                  className="w-10 h-10 rounded-full border border-stone-300 hover:border-forest-950 text-stone-600 hover:text-forest-950 flex items-center justify-center bg-white transition-all cursor-pointer"
+                  title="View previous related asset"
                 >
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-
-                {/* Content block section: Title Only */}
-                <div className="p-5 text-left flex-grow flex flex-col justify-between">
-                  <h3 
-                    onClick={() => handleItemSelect(item.id)}
-                    className="font-display font-black text-sm sm:text-base text-forest-950 leading-snug hover:text-solar-yellow-600 transition-colors cursor-pointer line-clamp-2"
-                  >
-                    {item.name}
-                  </h3>
-                </div>
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => {
+                    handleItemSelect(relatedCarouselItems[relatedCarouselItems.length - 1].id);
+                  }}
+                  className="w-10 h-10 rounded-full border border-stone-300 hover:border-forest-950 text-stone-600 hover:text-forest-950 flex items-center justify-center bg-white transition-all cursor-pointer"
+                  title="View next related asset"
+                >
+                  <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
-            ))}
+            )}
           </div>
+
+          {relatedCarouselItems.length === 0 ? (
+            <div className="py-12 text-center max-w-md mx-auto">
+              <Inbox className="w-12 h-12 text-stone-400 mx-auto mb-4" />
+              <h3 className="font-display font-black text-xl text-stone-400 mb-2">No related hardware components</h3>
+              <p className="text-stone-400 text-sm font-light max-w-sm mx-auto">
+                No other products found in the "{activeProduct.category}" category. Please explore our other categories using the filters in the catalog.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {relatedCarouselItems.map(item => (
+                <div 
+                  key={item.id}
+                  className="bg-white rounded-3xl border border-stone-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden group select-none text-left"
+                >
+                  {/* Container design: Image */}
+                  <div 
+                    onClick={() => handleItemSelect(item.id)}
+                    className="relative aspect-[4/3.3] bg-stone-100 overflow-hidden border-b border-stone-100 cursor-pointer"
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+
+                  {/* Content block section: Title Only */}
+                  <div className="p-5 text-left flex-grow flex flex-col justify-between">
+                    <h3 
+                      onClick={() => handleItemSelect(item.id)}
+                      className="font-display font-black text-sm sm:text-base text-forest-950 leading-snug hover:text-solar-yellow-600 transition-colors cursor-pointer line-clamp-2"
+                    >
+                      {item.name}
+                    </h3>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
         </div>
       </section>

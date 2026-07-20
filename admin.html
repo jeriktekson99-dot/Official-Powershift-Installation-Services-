@@ -613,6 +613,12 @@
             </svg>
           </button>
 
+          <!-- Cloud Synchronization Status Badge -->
+          <div id="cloud-sync-badge" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl font-mono text-[10px] font-bold text-emerald-700 uppercase tracking-wider select-none shrink-0 transition-all duration-300" title="Local database is fully synchronized with Supabase cloud.">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" id="cloud-sync-dot"></span>
+            <span id="cloud-sync-text">Cloud Synced</span>
+          </div>
+
           <!-- Website Logo Graphic (No container, raw interactive generic website icon logo element) -->
           <a 
             href="/" 
@@ -7691,7 +7697,7 @@
     }
 
     // FORM SAVE / COMMIT SUBMIT ACTIONS
-    recordForm.addEventListener("submit", (e) => {
+    recordForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       
       const activeMeta = SECTOR_METADATA[currentTab];
@@ -7737,6 +7743,7 @@
       }
 
       const activeArray = db[currentTab];
+      let randomId = "";
 
       if (editingId) {
         // Edit Operation
@@ -7744,7 +7751,6 @@
         if (idx !== -1) {
           // Keep primary index keys
           db[currentTab][idx] = { ...activeArray[idx], ...formData };
-          triggerToast(`Asset ${editingId} successfully committed.`, "success");
         }
       } else {
         // Create Operation
@@ -7754,7 +7760,7 @@
           currentTab === "packages" ? "PKG" : "LEAD";
         
         const timestampToken = Math.floor(100 + Math.random() * 900);
-        const randomId = `${prefix}-206-${timestampToken}`;
+        randomId = `${prefix}-206-${timestampToken}`;
 
         formData.id = randomId;
         formData.created_at = Date.now();
@@ -7770,13 +7776,35 @@
           }
         }
         db[currentTab].unshift(formData);
-        triggerToast(`New resource successfully provisioned as ${randomId}.`, "success");
       }
 
-      // Re-compile workspace visual elements and updates
+      // Save locally first
       saveToStorage();
-      closeRecordModal();
-      renderDashboard();
+
+      // Show loader on the submit button
+      const originalBtnHtml = modalSubmitBtn.innerHTML;
+      modalSubmitBtn.disabled = true;
+      modalSubmitBtn.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg> Syncing...
+      `;
+
+      try {
+        if (window.syncDatabaseGlobal) {
+          await window.syncDatabaseGlobal();
+        }
+        triggerToast(editingId ? `Asset ${editingId} successfully committed & synced to cloud.` : `New resource successfully created as ${randomId} & synced to cloud.`, "success");
+      } catch (err) {
+        console.warn("Cloud synchronization delayed:", err);
+        triggerToast(`Saved locally! (Cloud sync failed: ${err.message || err})`, "warning");
+      } finally {
+        modalSubmitBtn.disabled = false;
+        modalSubmitBtn.innerHTML = originalBtnHtml;
+        closeRecordModal();
+        renderDashboard();
+      }
     });
 
     // TRIGGER EDIT FROM ROW
@@ -8887,6 +8915,80 @@
         }
       }
 
+      // NOTIFICATION TOAST STATUS BADGE IMPLEMENTATION
+      function updateSyncStatus(status, details = "") {
+        const badge = document.getElementById("cloud-sync-badge");
+        const dot = document.getElementById("cloud-sync-dot");
+        const text = document.getElementById("cloud-sync-text");
+        if (!badge || !dot || !text) return;
+
+        if (status === "syncing") {
+          badge.className = "flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl font-mono text-[10px] font-bold text-amber-700 uppercase tracking-wider select-none shrink-0 transition-all duration-300";
+          dot.className = "w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0";
+          text.innerText = "Syncing...";
+        } else if (status === "error") {
+          badge.className = "flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 rounded-xl font-mono text-[10px] font-bold text-red-700 uppercase tracking-wider select-none shrink-0 transition-all duration-300";
+          dot.className = "w-2 h-2 rounded-full bg-red-500 shrink-0";
+          text.innerText = "Sync Error";
+          if (details) {
+            badge.title = details;
+          }
+        } else {
+          badge.className = "flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl font-mono text-[10px] font-bold text-emerald-700 uppercase tracking-wider select-none shrink-0 transition-all duration-300";
+          dot.className = "w-2 h-2 rounded-full bg-emerald-500 shrink-0";
+          text.innerText = "Cloud Synced";
+          badge.title = "Local database is fully synchronized with Supabase cloud.";
+        }
+      }
+
+      // Wrappers to handle sync status indicators and error capturing
+      async function wrappedPull() {
+        updateSyncStatus("syncing");
+        try {
+          await pullFromSupabase();
+          updateSyncStatus("synced");
+        } catch (err) {
+          console.error("Pull from Supabase failed:", err);
+          updateSyncStatus("error", err.message || err);
+        }
+      }
+
+      async function wrappedSyncDatabase() {
+        updateSyncStatus("syncing");
+        try {
+          await syncDatabase();
+          updateSyncStatus("synced");
+        } catch (err) {
+          console.error("Sync database failed:", err);
+          updateSyncStatus("error", err.message || err);
+          throw err;
+        }
+      }
+
+      async function wrappedSyncMeetings() {
+        updateSyncStatus("syncing");
+        try {
+          await syncMeetings();
+          updateSyncStatus("synced");
+        } catch (err) {
+          console.error("Sync meetings failed:", err);
+          updateSyncStatus("error", err.message || err);
+          throw err;
+        }
+      }
+
+      async function wrappedSyncSpecialOffers(isUserTriggered = false) {
+        updateSyncStatus("syncing");
+        try {
+          await syncSpecialOffers(isUserTriggered);
+          updateSyncStatus("synced");
+        } catch (err) {
+          console.error("Sync special offers failed:", err);
+          updateSyncStatus("error", err.message || err);
+          throw err;
+        }
+      }
+
       // Debounced Sync Handlers
       let dbTimeout = null;
       let meetingsTimeout = null;
@@ -8894,43 +8996,50 @@
 
       window.addEventListener('powershift_db_update', () => {
         clearTimeout(dbTimeout);
-        dbTimeout = setTimeout(syncDatabase, 1500);
+        dbTimeout = setTimeout(wrappedSyncDatabase, 50);
       });
 
       window.addEventListener('powershift_meetings_update', () => {
         clearTimeout(meetingsTimeout);
-        meetingsTimeout = setTimeout(syncMeetings, 1500);
+        meetingsTimeout = setTimeout(wrappedSyncMeetings, 50);
       });
 
       window.addEventListener('powershift_special_offers_update', () => {
         clearTimeout(offersTimeout);
-        offersTimeout = setTimeout(syncSpecialOffers, 1500);
+        offersTimeout = setTimeout(wrappedSyncSpecialOffers, 50);
       });
 
       // Also listen to storage events to catch changes from other tabs or pages
       window.addEventListener('storage', (e) => {
         if (e.key === "powershift_db") {
           clearTimeout(dbTimeout);
-          dbTimeout = setTimeout(syncDatabase, 2000);
+          dbTimeout = setTimeout(wrappedSyncDatabase, 100);
         } else if (e.key === "powershift_meetings") {
           clearTimeout(meetingsTimeout);
-          meetingsTimeout = setTimeout(syncMeetings, 2000);
+          meetingsTimeout = setTimeout(wrappedSyncMeetings, 100);
         } else if (e.key === "powershift_special_offers") {
           clearTimeout(offersTimeout);
-          offersTimeout = setTimeout(syncSpecialOffers, 2000);
+          offersTimeout = setTimeout(wrappedSyncSpecialOffers, 100);
         }
       });
 
       // Initial synchronization on startup to catch up any offline changes
       setTimeout(async () => {
-        window.syncSpecialOffersGlobal = syncSpecialOffers;
-        window.syncDatabaseGlobal = syncDatabase;
-        window.syncMeetingsGlobal = syncMeetings;
+        window.syncSpecialOffersGlobal = wrappedSyncSpecialOffers;
+        window.syncDatabaseGlobal = wrappedSyncDatabase;
+        window.syncMeetingsGlobal = wrappedSyncMeetings;
         
-        await pullFromSupabase();
-        syncDatabase();
-        syncMeetings();
-        syncSpecialOffers();
+        // PUSH any local unsynced offline changes first, so we don't overwrite them on initial pull!
+        try {
+          await syncDatabase();
+          await syncMeetings();
+          await syncSpecialOffers();
+        } catch (pushErr) {
+          console.warn("[Powershift Admin Sync] Startup push failed (might be offline):", pushErr);
+        }
+
+        // Now pull fresh data to capture remote changes
+        await wrappedPull();
       }, 1000);
     }
   </script>
