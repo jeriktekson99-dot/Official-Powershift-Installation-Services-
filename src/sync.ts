@@ -437,6 +437,10 @@ export function useSyncDb() {
 
     // Background fetch helper to pull fresh listings from Supabase
     const syncWithSupabase = () => {
+      if (document.visibilityState === 'hidden') {
+        // Skip background syncing when tab is in the background to minimize egress and prevent admin race conditions
+        return;
+      }
       Promise.all([
         supabaseService.getPortfolio().catch(err => { console.warn("[Supabase Sync] Portfolio fetch error:", err); return null; }),
         supabaseService.getProducts().catch(err => { console.warn("[Supabase Sync] Products fetch error:", err); return null; }),
@@ -476,13 +480,22 @@ export function useSyncDb() {
     // Initial background load from Supabase to catch up
     syncWithSupabase();
 
-    // Establish dynamic background polling interval to pull new admin postings instantly
-    const intervalId = setInterval(syncWithSupabase, 5000);
+    // Sync on window focus or visibility change to catch up on recent modifications instantly when returned
+    const handleFocus = () => {
+      syncWithSupabase();
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleFocus);
+
+    // Establish dynamic background polling interval to pull new admin postings (very relaxed rate: 60s)
+    const intervalId = setInterval(syncWithSupabase, 60000);
 
     return () => {
       clearInterval(intervalId);
       window.removeEventListener('storage', handleUpdate);
       window.removeEventListener('powershift_db_update', handleUpdate);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
     };
   }, []);
 
@@ -755,6 +768,10 @@ export function useSyncSpecialOffers() {
     window.addEventListener('powershift_special_offers_update', handleUpdate);
 
     const fetchOffers = () => {
+      if (document.visibilityState === 'hidden') {
+        // Skip background syncing when tab is in the background to minimize egress and prevent admin race conditions
+        return;
+      }
       supabaseService.getSpecialOffers()
         .then((remoteOffers) => {
           if (remoteOffers !== null && Array.isArray(remoteOffers)) {
@@ -773,13 +790,22 @@ export function useSyncSpecialOffers() {
     // Initial load from Supabase to catch up
     fetchOffers();
 
-    // Setup active background polling for promotional campaign assets
-    const intervalId = setInterval(fetchOffers, 5000);
+    // Sync on window focus or visibility change to catch up on recent modifications instantly when returned
+    const handleFocus = () => {
+      fetchOffers();
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleFocus);
+
+    // Setup active background polling for promotional campaign assets (very relaxed rate: 60s)
+    const intervalId = setInterval(fetchOffers, 60000);
 
     return () => {
       clearInterval(intervalId);
       window.removeEventListener('storage', handleUpdate);
       window.removeEventListener('powershift_special_offers_update', handleUpdate);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleFocus);
     };
   }, []);
 
