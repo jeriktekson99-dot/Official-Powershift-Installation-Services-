@@ -8133,17 +8133,11 @@
     // 1. Security Access Clearance Submit Handler
     const securityForm = document.getElementById("security-form");
     if (securityForm) {
-      securityForm.addEventListener("submit", (e) => {
+      securityForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const oldPass = document.getElementById("security-old-pass").value;
         const newPass = document.getElementById("security-new-pass").value;
         const retypeNewPass = document.getElementById("security-retype-new-pass").value;
-
-        const currentPass = window.MASTER_GATE_PASS || MASTER_GATE_PASS;
-        if (oldPass !== currentPass) {
-          triggerToast("Old Password mismatch! Access denied.", "danger");
-          return;
-        }
 
         if (6 > newPass.length) {
           triggerToast("New password must be at least 6 characters.", "danger");
@@ -8155,17 +8149,51 @@
           return;
         }
 
-        MASTER_GATE_PASS = newPass;
-        window.MASTER_GATE_PASS = newPass;
-        localStorage.setItem("powershift_admin_pass", newPass);
-        
-        // Sync to Supabase
-        if (typeof window.supabaseSyncConfig === "function") {
-          window.supabaseSyncConfig('admin_password', newPass);
+        const submitBtn = securityForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn ? submitBtn.innerText : "Save Password";
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerText = "Updating Password...";
         }
-        
-        triggerToast("Password successfully updated.", "success");
-        securityForm.reset();
+
+        try {
+          if (typeof window.supabaseUpdatePassword === "function") {
+            // Update in Supabase Auth securely
+            await window.supabaseUpdatePassword(oldPass, newPass);
+
+            MASTER_GATE_PASS = newPass;
+            window.MASTER_GATE_PASS = newPass;
+            localStorage.setItem("powershift_admin_pass", newPass);
+
+            // Sync config to DB
+            if (typeof window.supabaseSyncConfig === "function") {
+              await window.supabaseSyncConfig('admin_password', newPass);
+            }
+
+            triggerToast("Password successfully updated in Supabase cloud.", "success");
+          } else {
+            // Offline/Local Fallback Mode
+            const currentPass = window.MASTER_GATE_PASS || MASTER_GATE_PASS;
+            if (oldPass !== currentPass) {
+              triggerToast("Old Password mismatch! Access denied.", "danger");
+              return;
+            }
+
+            MASTER_GATE_PASS = newPass;
+            window.MASTER_GATE_PASS = newPass;
+            localStorage.setItem("powershift_admin_pass", newPass);
+
+            triggerToast("Password successfully updated locally.", "success");
+          }
+          securityForm.reset();
+        } catch (err) {
+          triggerToast(err.message || "Failed to update password.", "danger");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalText;
+          }
+        }
       });
     }
 
@@ -8474,6 +8502,39 @@
         if (error) {
           throw error;
         }
+        return true;
+      };
+
+      window.supabaseUpdatePassword = async function(oldPassword, newPassword) {
+        if (!supabase) {
+          throw new Error("Supabase is offline or not configured.");
+        }
+
+        // 1. Get the current active user session
+        const { data: { user }, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !user || !user.email) {
+          throw new Error("No active administrator session found. Please sign in again.");
+        }
+
+        // 2. Re-authenticate to verify old password correctness
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: oldPassword
+        });
+
+        if (signInErr) {
+          throw new Error("Old Password mismatch! Access denied.");
+        }
+
+        // 3. Update the password in Supabase Auth securely
+        const { error: updateErr } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+
+        if (updateErr) {
+          throw updateErr;
+        }
+
         return true;
       };
 
