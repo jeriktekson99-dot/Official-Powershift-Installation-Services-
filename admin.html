@@ -2923,11 +2923,18 @@
           
           // Transition cleanly
           viewLogin.classList.add("opacity-0", "transition-opacity", "duration-300");
-          setTimeout(() => {
+          setTimeout(async () => {
             viewLogin.classList.add("hidden");
             viewLogin.classList.remove("opacity-0");
             viewDashboard.classList.remove("hidden");
             
+            if (typeof window.pullFromSupabaseGlobal === "function") {
+              try {
+                await window.pullFromSupabaseGlobal();
+              } catch (pullErr) {
+                console.error("[Supabase Pull Failed]", pullErr);
+              }
+            }
             renderDashboard();
           }, 300);
           return;
@@ -8456,11 +8463,25 @@
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+    window.supabasePullCompleted = false;
+
     if (!supabaseUrl || !supabaseAnonKey) {
       console.log("[Powershift Admin Sync] Supabase connection parameters are missing. Active cloud syncing is offline (Local-Only mode).");
     } else {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       console.log("[Powershift Admin Sync] Supabase active cloud connection successfully established.");
+
+      // Setup session restoration pull handler
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session) {
+          console.log("[Powershift Admin Sync] Supabase active user session detected/changed:", event);
+          try {
+            await pullFromSupabase();
+          } catch (err) {
+            console.error("[Powershift Admin Sync] Automatic pull failed on session handshake:", err);
+          }
+        }
+      });
 
       window.supabaseLogin = async function(email, password) {
         if (!supabase) {
@@ -8734,6 +8755,8 @@
           if (typeof window.renderDashboard === "function") window.renderDashboard();
           if (typeof window.renderSchedulingDeck === "function") window.renderSchedulingDeck();
 
+          window.supabasePullCompleted = true;
+          console.log("[Powershift Admin Sync] Supabase data successfully downloaded. Mutation safety-lock released.");
         } catch (err) {
           console.log("[Powershift Admin Sync] Error during initial Supabase pull:", err);
         }
@@ -8750,7 +8773,7 @@
           if (db.portfolio) {
             try {
               const { data: remotePortfolio, error: fetchErr } = await supabase.from('portfolio').select('id');
-              if (!fetchErr && remotePortfolio) {
+              if (window.supabasePullCompleted && !fetchErr && remotePortfolio) {
                 const localPortfolioIds = db.portfolio.map(p => p.id);
                 const portfolioIdsToDelete = remotePortfolio.map(p => p.id).filter(id => !localPortfolioIds.includes(id));
                 if (portfolioIdsToDelete.length > 0) {
@@ -8791,7 +8814,7 @@
           if (db.products) {
             try {
               const { data: remoteProducts, error: fetchErr } = await supabase.from('products').select('id');
-              if (!fetchErr && remoteProducts) {
+              if (window.supabasePullCompleted && !fetchErr && remoteProducts) {
                 const localProductsIds = db.products.map(p => p.id);
                 const productsIdsToDelete = remoteProducts.map(p => p.id).filter(id => !localProductsIds.includes(id));
                 if (productsIdsToDelete.length > 0) {
@@ -8825,7 +8848,7 @@
           if (db.packages) {
             try {
               const { data: remotePackages, error: fetchErr } = await supabase.from('packages').select('id');
-              if (!fetchErr && remotePackages) {
+              if (window.supabasePullCompleted && !fetchErr && remotePackages) {
                 const localPackagesIds = db.packages.map(p => p.id);
                 const packagesIdsToDelete = remotePackages.map(p => p.id).filter(id => !localPackagesIds.includes(id));
                 if (packagesIdsToDelete.length > 0) {
@@ -8857,7 +8880,7 @@
           if (db.leads) {
             try {
               const { data: remoteLeads, error: fetchErr } = await supabase.from('leads').select('id');
-              if (!fetchErr && remoteLeads) {
+              if (window.supabasePullCompleted && !fetchErr && remoteLeads) {
                 const localLeadsIds = db.leads.map(l => l.id);
                 const leadsIdsToDelete = remoteLeads.map(l => l.id).filter(id => !localLeadsIds.includes(id));
                 if (leadsIdsToDelete.length > 0) {
@@ -8899,7 +8922,7 @@
         try {
           const meetings = JSON.parse(data);
           const { data: remoteMeetings, error: fetchErr } = await supabase.from('meetings').select('id');
-          if (!fetchErr && remoteMeetings) {
+          if (window.supabasePullCompleted && !fetchErr && remoteMeetings) {
             const localMeetingIds = meetings.map(m => m.id);
             const meetingIdsToDelete = remoteMeetings.map(m => m.id).filter(id => !localMeetingIds.includes(id));
             if (meetingIdsToDelete.length > 0) {
@@ -8939,7 +8962,7 @@
           const { data: remoteOffers, error: fetchErr } = await supabase.from('special_offers').select('id');
           if (fetchErr) throw fetchErr;
           
-          if (remoteOffers) {
+          if (window.supabasePullCompleted && remoteOffers) {
             const localOfferIds = specialOffers.map(o => o.id);
             const offerIdsToDelete = remoteOffers.map(o => o.id).filter(id => !localOfferIds.includes(id));
             if (offerIdsToDelete.length > 0) {
@@ -9083,6 +9106,7 @@
         window.syncSpecialOffersGlobal = wrappedSyncSpecialOffers;
         window.syncDatabaseGlobal = wrappedSyncDatabase;
         window.syncMeetingsGlobal = wrappedSyncMeetings;
+        window.pullFromSupabaseGlobal = wrappedPull;
         
         // PUSH any local unsynced offline changes first, so we don't overwrite them on initial pull!
         try {
