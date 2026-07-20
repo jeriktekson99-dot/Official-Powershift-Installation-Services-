@@ -724,7 +724,10 @@ export default function ProductDetailsPage({
               {/* Image Showcase */}
               <div className="space-y-4">
                 {/* Large Display Image */}
-                <div className="relative rounded-2xl overflow-hidden border border-stone-200 aspect-[16/10] bg-stone-100 shadow-sm">
+                <div 
+                  className="relative w-full max-w-[940px] rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 shadow-sm aspect-[940/788]"
+                  style={{ aspectRatio: "940 / 788" }}
+                >
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={activeThumbIndex}
