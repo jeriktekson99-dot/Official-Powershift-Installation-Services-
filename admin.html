@@ -8429,7 +8429,7 @@
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn("[Powershift Admin Sync] Supabase connection parameters are missing. Active cloud syncing is offline (Local-Only mode).");
+      console.log("[Powershift Admin Sync] Supabase connection parameters are missing. Active cloud syncing is offline (Local-Only mode).");
     } else {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       console.log("[Powershift Admin Sync] Supabase active cloud connection successfully established.");
@@ -8457,12 +8457,12 @@
             updated_at: new Date().toISOString()
           });
           if (error) {
-            console.warn(`[Supabase Config Sync] Failed to sync ${key}:`, error.message);
+            console.log(`[Supabase Config Sync] Failed to sync ${key}:`, error.message);
           } else {
             console.log(`[Supabase Config Sync] Synced ${key} successfully.`);
           }
         } catch (err) {
-          console.warn(`[Supabase Config Sync] Error syncing ${key}:`, err);
+          console.log(`[Supabase Config Sync] Error syncing ${key}:`, err);
         }
       };
 
@@ -8662,7 +8662,7 @@
               if (typeof window.renderSettingsView === "function") window.renderSettingsView();
             }
           } catch (cfgFetchErr) {
-            console.warn("[Powershift Admin Sync] Failed to fetch system configuration from Supabase:", cfgFetchErr);
+            console.log("[Powershift Admin Sync] Failed to fetch system configuration from Supabase:", cfgFetchErr);
           }
 
           // Reload JS variables from local storage and trigger renders
@@ -8674,7 +8674,7 @@
           if (typeof window.renderSchedulingDeck === "function") window.renderSchedulingDeck();
 
         } catch (err) {
-          console.warn("[Powershift Admin Sync] Error during initial Supabase pull:", err);
+          console.log("[Powershift Admin Sync] Error during initial Supabase pull:", err);
         }
       }
 
@@ -8722,7 +8722,7 @@
                 console.log(`[Powershift Admin Sync] Successfully synchronized ${db.portfolio.length} portfolio items to Supabase.`);
               }
             } catch (err) {
-              console.warn("[Powershift Admin Sync] Failed to sync portfolio:", err);
+              console.log("[Powershift Admin Sync] Failed to sync portfolio:", err);
             }
           }
 
@@ -8756,7 +8756,7 @@
                 console.log(`[Powershift Admin Sync] Successfully synchronized ${db.products.length} products to Supabase.`);
               }
             } catch (err) {
-              console.warn("[Powershift Admin Sync] Failed to sync products:", err);
+              console.log("[Powershift Admin Sync] Failed to sync products:", err);
             }
           }
 
@@ -8788,7 +8788,7 @@
                 console.log(`[Powershift Admin Sync] Successfully synchronized ${db.packages.length} packages to Supabase.`);
               }
             } catch (err) {
-              console.warn("[Powershift Admin Sync] Failed to sync packages:", err);
+              console.log("[Powershift Admin Sync] Failed to sync packages:", err);
             }
           }
 
@@ -8823,12 +8823,12 @@
                 console.log(`[Powershift Admin Sync] Successfully synchronized ${db.leads.length} leads to Supabase.`);
               }
             } catch (err) {
-              console.warn("[Powershift Admin Sync] Failed to sync leads:", err);
+              console.log("[Powershift Admin Sync] Failed to sync leads:", err);
             }
           }
 
         } catch (parseErr) {
-          console.warn("[Powershift Admin Sync] Error parsing storage database during sync:", parseErr);
+          console.log("[Powershift Admin Sync] Error parsing storage database during sync:", parseErr);
         }
       }
 
@@ -8863,7 +8863,7 @@
             console.log(`[Powershift Admin Sync] Successfully synchronized ${meetings.length} meetings to Supabase.`);
           }
         } catch (err) {
-          console.warn("[Powershift Admin Sync] Failed to sync meetings:", err);
+          console.log("[Powershift Admin Sync] Failed to sync meetings:", err);
         }
       }
 
@@ -8901,7 +8901,7 @@
             window.triggerToast("Successfully synchronized special offers to Supabase cloud!", "success");
           }
         } catch (err) {
-          console.warn("[Powershift Admin Sync] Failed to sync special offers:", err);
+          console.log("[Powershift Admin Sync] Failed to sync special offers:", err);
           if (typeof window.triggerToast === "function") {
             window.triggerToast(`Supabase Sync Failed: ${err.message || err}`, "danger");
           }
@@ -9029,7 +9029,7 @@
           await syncMeetings();
           await syncSpecialOffers();
         } catch (pushErr) {
-          console.warn("[Powershift Admin Sync] Startup push failed (might be offline):", pushErr);
+          console.log("[Powershift Admin Sync] Startup push failed (might be offline):", pushErr);
         }
 
         // Now pull fresh data to capture remote changes

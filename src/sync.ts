@@ -473,7 +473,7 @@ export function useSyncDb() {
           setDb(localDb);
         }
       }).catch(err => {
-        console.warn("[Powershift Sync] Failed to load database from Supabase:", err);
+        console.log("[Powershift Sync] Failed to load database from Supabase:", err);
       });
     };
 
@@ -783,7 +783,7 @@ export function useSyncSpecialOffers() {
           }
         })
         .catch((err) => {
-          console.warn("[Powershift Sync] Failed to load special offers from Supabase (using cached):", err);
+          console.log("[Powershift Sync] Failed to load special offers from Supabase (using cached):", err);
         });
     };
 
@@ -863,7 +863,7 @@ export function useSyncSocialLinks() {
         }
       })
       .catch((err) => {
-        console.warn("[Powershift Sync] Failed to load social links from Supabase (using cached/default):", err);
+        console.log("[Powershift Sync] Failed to load social links from Supabase (using cached/default):", err);
       });
 
     return () => {

@@ -24,13 +24,13 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Error fetching portfolio from Supabase:', error.message);
+        console.log('Error fetching portfolio from Supabase:', error.message);
         throw error;
       }
 
       return data as ProjectRecord[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching portfolio from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching portfolio from Supabase:', err.message || err);
       throw err;
     }
   },
@@ -46,13 +46,13 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Error fetching products from Supabase:', error.message);
+        console.log('Error fetching products from Supabase:', error.message);
         throw error;
       }
 
       return data as ProductRecord[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching products from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching products from Supabase:', err.message || err);
       throw err;
     }
   },
@@ -68,7 +68,7 @@ export const supabaseService = {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.warn('Error fetching packages from Supabase:', error.message);
+        console.log('Error fetching packages from Supabase:', error.message);
         throw error;
       }
 
@@ -84,7 +84,7 @@ export const supabaseService = {
         status: pkg.status,
       })) as PackageRecord[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching packages from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching packages from Supabase:', err.message || err);
       throw err;
     }
   },
@@ -100,7 +100,7 @@ export const supabaseService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Error fetching leads from Supabase:', error.message);
+        console.log('Error fetching leads from Supabase:', error.message);
         throw error;
       }
 
@@ -118,7 +118,7 @@ export const supabaseService = {
         propertyType: lead.property_type,
       })) as LeadRecord[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching leads from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching leads from Supabase:', err.message || err);
       throw err;
     }
   },
@@ -161,11 +161,11 @@ export const supabaseService = {
         ]);
 
       if (error) {
-        console.warn('Error inserting lead to Supabase:', error.message);
+        console.log('Error inserting lead to Supabase:', error.message);
         throw error;
       }
     } catch (err: any) {
-      console.warn('Network or configuration error inserting lead to Supabase:', err.message || err);
+      console.log('Network or configuration error inserting lead to Supabase:', err.message || err);
       throw err;
     }
 
@@ -195,7 +195,7 @@ export const supabaseService = {
         .order('date', { ascending: true });
 
       if (error) {
-        console.warn('Error fetching meetings from Supabase:', error.message);
+        console.log('Error fetching meetings from Supabase:', error.message);
         throw error;
       }
 
@@ -211,7 +211,7 @@ export const supabaseService = {
         status: meet.status,
       })) as MeetingRecord[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching meetings from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching meetings from Supabase:', err.message || err);
       throw err;
     }
   },
@@ -248,11 +248,11 @@ export const supabaseService = {
         ]);
 
       if (error) {
-        console.warn('Error inserting meeting to Supabase:', error.message);
+        console.log('Error inserting meeting to Supabase:', error.message);
         throw error;
       }
     } catch (err: any) {
-      console.warn('Network or configuration error inserting meeting to Supabase:', err.message || err);
+      console.log('Network or configuration error inserting meeting to Supabase:', err.message || err);
       throw err;
     }
 
@@ -270,13 +270,13 @@ export const supabaseService = {
         .order('timestamp', { ascending: false });
 
       if (error) {
-        console.warn('Error fetching special offers from Supabase:', error.message);
+        console.log('Error fetching special offers from Supabase:', error.message);
         throw error;
       }
 
       return data as SpecialOfferRecord[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching special offers from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching special offers from Supabase:', err.message || err);
       throw err;
     }
   },
@@ -291,13 +291,13 @@ export const supabaseService = {
         .select('*');
 
       if (error) {
-        console.warn('Error fetching system_config from Supabase:', error.message);
+        console.log('Error fetching system_config from Supabase:', error.message);
         throw error;
       }
 
       return data as { key: string; value: string }[];
     } catch (err: any) {
-      console.warn('Network or configuration error fetching system_config from Supabase:', err.message || err);
+      console.log('Network or configuration error fetching system_config from Supabase:', err.message || err);
       throw err;
     }
   }
